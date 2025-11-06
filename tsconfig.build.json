@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "exclude": [
+    "node_modules",
+    "test",
+    "dist",
+    "**/*spec.ts",
+    "src/modules/auth",
+    "src/modules/rbac",
+    "src/modules/users",
+    "src/common/guards/permissions.guard.ts",
+    "src/common/guards/jwt-auth.guard.ts"
+  ]
+}
