@@ -18,6 +18,7 @@ export interface TranscriptionOptions {
   model?: string;
   language?: string;
   prompt?: string;
+  mimeType?: string;
 }
 
 

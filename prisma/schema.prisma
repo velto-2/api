@@ -1,0 +1,277 @@
+// Prisma Schema for Velto API
+// Database: MongoDB
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("MONGODB_URI")
+}
+
+// Enums
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  PENDING_INVITATION
+  SUSPENDED
+}
+
+enum OrganizationType {
+  INTERNAL
+  CLIENT
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  PENDING_VERIFICATION
+  SUSPENDED
+  INACTIVE
+}
+
+enum RoleScope {
+  GLOBAL
+  ORGANIZATION
+}
+
+enum PermissionResource {
+  TEST
+  TEST_RUN
+  IMPORTED_CALL
+  SPEECH
+  DIGITAL_HUMAN
+  TELEPHONY
+  ORGANIZATION
+  USER
+  ROLE
+  PERMISSION
+  ANALYTICS
+  SETTINGS
+  AUDIT_LOG
+}
+
+enum PermissionAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  APPROVE
+  REJECT
+  SIGN
+  ASSIGN
+  EXPORT
+  EXECUTE
+  CANCEL
+  IMPORT
+  ANALYZE
+  TRANSCRIBE
+  SYNTHESIZE
+  CONFIGURE
+  INITIATE
+}
+
+// Models
+model User {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String   @db.ObjectId
+  email         String    @unique
+  password      String
+  phone         String?
+  firstName     String
+  lastName      String
+  firstNameAr   String?
+  lastNameAr    String?
+  status        UserStatus @default(ACTIVE)
+  isActive      Boolean   @default(true)
+  emailVerified Boolean   @default(false)
+  phoneVerified Boolean   @default(false)
+  avatar        String?
+  lastLoginAt   DateTime?
+  preferences   Json?
+  refreshToken  String?
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  organization  Organization @relation(fields: [organizationId], references: [id])
+  userRoles     UserRole[]
+  userPermissions UserPermission[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@map("users")
+}
+
+model Organization {
+  id                String             @id @default(auto()) @map("_id") @db.ObjectId
+  type              OrganizationType
+  status            OrganizationStatus @default(PENDING_VERIFICATION)
+  name              String
+  nameAr            String?
+  email             String             @unique
+  phone             String
+  registrationNumber String
+  taxNumber         String?
+  logo              String?
+  description       String?
+  descriptionAr     String?
+  website           String?
+  address           Json?
+  industry          String[]
+  licenseNumber     String?
+  licenseExpiry     DateTime?
+  settings          Json?
+  metadata          Json?
+  verifiedAt        DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  users             User[]
+  roles             Role[]
+  testSchedules     TestSchedule[]
+  testSuites        TestSuite[]
+
+  @@index([status])
+  @@map("organizations")
+}
+
+model Role {
+  id            String     @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String?   @db.ObjectId
+  name          String
+  slug          String
+  description   String?
+  scope         RoleScope  @default(ORGANIZATION)
+  isSystem      Boolean    @default(false)
+  isActive      Boolean    @default(true)
+  color         String?
+  icon          String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  organization  Organization? @relation(fields: [organizationId], references: [id])
+  userRoles     UserRole[]
+  permissions   RolePermission[]
+
+  @@index([organizationId])
+  @@index([scope])
+  @@index([slug, organizationId])
+  @@map("roles")
+}
+
+model Permission {
+  id          String            @id @default(auto()) @map("_id") @db.ObjectId
+  resource    PermissionResource
+  action      PermissionAction
+  name        String
+  description String?
+  isSystem    Boolean           @default(true)
+  isActive    Boolean           @default(true)
+  conditions  Json?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  roles       RolePermission[]
+  users       UserPermission[]
+
+  @@unique([resource, action])
+  @@index([resource])
+  @@index([action])
+  @@map("permissions")
+}
+
+model UserRole {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String    @db.ObjectId
+  roleId      String    @db.ObjectId
+  assignedBy  String?   @db.ObjectId
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id])
+  role        Role     @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  roleId       String   @db.ObjectId
+  permissionId String   @db.ObjectId
+  createdAt    DateTime @default(now())
+
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model UserPermission {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String   @db.ObjectId
+  permissionId String   @db.ObjectId
+  assignedBy   String?   @db.ObjectId
+  expiresAt    DateTime?
+  conditions   Json?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user         User       @relation(fields: [userId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([userId, permissionId])
+  @@index([userId])
+  @@index([permissionId])
+  @@map("user_permissions")
+}
+
+model TestSchedule {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String   @db.ObjectId
+  testConfigId  String    @db.ObjectId
+  name          String
+  description   String?
+  schedule      String    // Cron expression
+  timezone      String    @default("UTC")
+  isActive      Boolean   @default(true)
+  nextRunAt     DateTime?
+  lastRunAt     DateTime?
+  runCount      Int       @default(0)
+  settings      Json?     // Additional settings
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  organization  Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([testConfigId])
+  @@index([isActive])
+  @@index([nextRunAt])
+  @@map("test_schedules")
+}
+
+model TestSuite {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String   @db.ObjectId
+  name          String
+  description   String?
+  testIds       String[]  @db.ObjectId // Array of test config IDs
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  organization  Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([isActive])
+  @@map("test_suites")
+}
+

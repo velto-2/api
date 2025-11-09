@@ -1,5 +1,10 @@
 import { Body, Controller, Post, UseGuards, Get } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -18,7 +23,10 @@ export class AuthController {
   @Public()
   @Post('register')
   @ApiOperation({ summary: 'Register new organization and admin user' })
-  @ApiResponse({ status: 201, description: 'Organization and user created successfully' })
+  @ApiResponse({
+    status: 201,
+    description: 'Organization and user created successfully',
+  })
   @ApiResponse({ status: 409, description: 'Email already exists' })
   async register(@Body() registerDto: RegisterDto) {
     const result = await this.authService.register(registerDto);
@@ -41,7 +49,9 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Token refreshed successfully' })
   @ApiResponse({ status: 401, description: 'Invalid refresh token' })
   async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
-    const result = await this.authService.refreshTokens(refreshTokenDto.refreshToken);
+    const result = await this.authService.refreshTokens(
+      refreshTokenDto.refreshToken,
+    );
     return BaseResponseDto.success('Token refreshed successfully', result);
   }
 
@@ -61,6 +71,8 @@ export class AuthController {
   @ApiOperation({ summary: 'Get current user profile' })
   @ApiResponse({ status: 200, description: 'Profile retrieved successfully' })
   async getProfile(@CurrentUser() user: RequestUser) {
-    return BaseResponseDto.success('Profile retrieved successfully', user);
+    // Get full user data with roles
+    const fullUser = await this.authService.getUserProfile(user.userId);
+    return BaseResponseDto.success('Profile retrieved successfully', fullUser);
   }
 }

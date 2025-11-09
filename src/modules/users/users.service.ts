@@ -390,9 +390,6 @@ export class UsersService {
       where: { id: userId },
       data: {
         password: hashedNewPassword,
-        // Clear any reset tokens
-        resetToken: null,
-        resetTokenExpiry: null,
       },
     });
 

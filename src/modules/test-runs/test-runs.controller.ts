@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Param,
+  Query,
   HttpCode,
   HttpStatus,
   Res,
@@ -15,6 +16,7 @@ import { Types } from 'mongoose';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { TestRunsService } from './test-runs.service';
 import { CreateTestRunDto } from './dto/create-test-run.dto';
+import { AnalyticsQueryDto } from './dto/analytics-query.dto';
 import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('Test Runs')
@@ -70,6 +72,16 @@ export class TestRunsController {
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('Content-Length', audioBuffer.length);
     res.send(audioBuffer);
+  }
+
+  @Get('analytics')
+  @ApiOperation({ summary: 'Get test run analytics' })
+  @ApiResponse({
+    status: 200,
+    description: 'Analytics data retrieved successfully',
+  })
+  async getAnalytics(@Query() query: AnalyticsQueryDto) {
+    return this.testRunsService.getAnalytics(query);
   }
 
   @Get(':id')

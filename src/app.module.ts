@@ -4,15 +4,23 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
 import { MongodbModule } from './database/mongodb/mongodb.module';
+import { PrismaModule } from './database/prisma/prisma.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/users/users.module';
+import { RbacModule } from './modules/rbac/rbac.module';
 import { TelephonyModule } from './modules/telephony/telephony.module';
 import { TestsModule } from './modules/tests/tests.module';
 import { SpeechModule } from './modules/speech/speech.module';
 import { DigitalHumanModule } from './modules/digital-human/digital-human.module';
 import { TestRunsModule } from './modules/test-runs/test-runs.module';
+import { ImportedCallsModule } from './modules/imported-calls/imported-calls.module';
+import { TestSchedulesModule } from './modules/test-schedules/test-schedules.module';
 import {
   appConfig,
   databaseConfig,
   twilioConfig,
+  vonageConfig,
+  telephonyConfig,
   cloudflareConfig,
   elevenlabsConfig,
 } from './config';
@@ -25,17 +33,25 @@ import {
         appConfig,
         databaseConfig,
         twilioConfig,
+        vonageConfig,
+        telephonyConfig,
         cloudflareConfig,
         elevenlabsConfig,
       ],
       envFilePath: ['.env'],
     }),
+    PrismaModule,
     MongodbModule,
+    AuthModule,
+    UsersModule,
+    RbacModule,
     TelephonyModule,
     TestsModule,
     SpeechModule,
     DigitalHumanModule,
     TestRunsModule,
+    ImportedCallsModule,
+    TestSchedulesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

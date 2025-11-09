@@ -8,7 +8,7 @@ import {
   HttpCode,
   HttpStatus,
   Logger,
-  Header,
+  Res,
   Inject,
   forwardRef,
 } from '@nestjs/common';
@@ -33,24 +33,17 @@ export class TelephonyController {
   @Public()
   @Post('webhook/voice')
   @HttpCode(HttpStatus.OK)
-  @Header('Content-Type', 'text/xml')
-  @ApiOperation({ summary: 'Twilio voice webhook handler' })
+  @ApiOperation({ summary: 'Voice webhook handler (supports Twilio and Vonage)' })
   @ApiResponse({
     status: 200,
-    description: 'TwiML response',
-    content: {
-      'text/xml': {
-        schema: {
-          type: 'string',
-        },
-      },
-    },
+    description: 'Call instructions (TwiML for Twilio, NCCO for Vonage)',
   })
   async handleVoiceWebhook(
     @Query('testRunId') testRunId: string,
     @Query('action') action: string,
     @Body() body: any,
-  ): Promise<string> {
+    @Res() res: any,
+  ): Promise<void> {
     this.logger.log(
       `Voice webhook received for test run ${testRunId}, action: ${action}`,
     );
@@ -58,7 +51,11 @@ export class TelephonyController {
     // Get test run to find current audio URL
     const testRun = await this.testRunsService.findOne(testRunId);
     const audioUrl = testRun?.metadata?.currentAudioUrl;
+    
+    // Get provider name to determine content type
+    const providerName = this.configService.get<string>('telephony.provider') || 'twilio';
     const webhookBaseUrl =
+      this.configService.get<string>(`${providerName}.webhookBaseUrl`) ||
       this.configService.get<string>('twilio.webhookBaseUrl') ||
       'http://localhost:3000';
 
@@ -67,54 +64,69 @@ export class TelephonyController {
 
     if (!audioUrl) {
       this.logger.warn(
-        `No audio URL found for test run ${testRunId}, returning empty TwiML`,
+        `No audio URL found for test run ${testRunId}, returning empty instructions`,
       );
-      // Return TwiML that just says something
-      return this.telephonyService.generateTwiML({
+      const instructions = this.telephonyService.generateTwiML({
         audioUrl: undefined,
         record: false,
       });
+      
+      // Set content type based on provider
+      if (providerName === 'vonage') {
+        res.setHeader('Content-Type', 'application/json');
+        res.send(instructions);
+      } else {
+        res.setHeader('Content-Type', 'text/xml');
+        res.send(instructions);
+      }
+      return;
     }
 
     this.logger.log(`Playing audio URL: ${audioUrl} for test run ${testRunId}`);
     this.logger.log(`Recording callback URL: ${recordingCallbackUrl}`);
 
-    // Generate TwiML that plays audio and records response
-    const twiml = this.telephonyService.generateTwiML({
+    // Generate call instructions (TwiML for Twilio, NCCO for Vonage)
+    const instructions = this.telephonyService.generateTwiML({
       audioUrl: audioUrl,
       record: true,
       maxLength: 10,
       timeout: 3,
-      actionUrl: recordingCallbackUrl, // Twilio will POST recording info here
+      actionUrl: recordingCallbackUrl,
     });
 
-    this.logger.log(`Generated TwiML: ${twiml.substring(0, 200)}...`);
-    return twiml;
+    // Set content type based on provider
+    if (providerName === 'vonage') {
+      res.setHeader('Content-Type', 'application/json');
+      this.logger.log(`Generated NCCO: ${instructions.substring(0, 200)}...`);
+    } else {
+      res.setHeader('Content-Type', 'text/xml');
+      this.logger.log(`Generated TwiML: ${instructions.substring(0, 200)}...`);
+    }
+    
+    res.send(instructions);
   }
 
   @Public()
   @Post('webhook/status')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Twilio status callback webhook' })
+  @ApiOperation({ summary: 'Status callback webhook (supports Twilio and Vonage)' })
   async handleStatusCallback(@Body() body: any): Promise<void> {
     this.logger.log(`Call status update: ${JSON.stringify(body)}`);
     // Handle status updates (initiated, ringing, answered, completed)
     // This will update the test run status in the database
+    // Provider-specific parsing is handled by parseWebhookPayload
   }
 
   @Public()
   @Post('webhook/recording')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Twilio recording callback webhook' })
+  @ApiOperation({ summary: 'Recording callback webhook (supports Twilio and Vonage)' })
   async handleRecordingCallback(@Body() body: any): Promise<void> {
     this.logger.log(`[RECORDING CALLBACK] Received: ${JSON.stringify(body)}`);
     
-    // Extract recording information from Twilio webhook
-    // Twilio sends different formats depending on the callback type
-    const recordingUrl = body.RecordingUrl || body.recordingUrl || body.url;
-    const callSid = body.CallSid || body.callSid;
-    const recordingSid = body.RecordingSid || body.recordingSid || body.sid;
-    const recordingStatus = body.RecordingStatus || body.status;
+    // Use provider's parseWebhookPayload to extract information
+    const parsed = this.telephonyService.parseWebhookPayload(body);
+    const { callSid, recordingUrl, recordingSid, recordingStatus } = parsed;
     
     this.logger.log(
       `[RECORDING CALLBACK] Parsed - URL: ${recordingUrl}, CallSid: ${callSid}, Status: ${recordingStatus}`,
@@ -146,7 +158,7 @@ export class TelephonyController {
         recordingSid,
       );
       this.logger.log(`[RECORDING CALLBACK] Successfully processed recording`);
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(
         `[RECORDING CALLBACK] Failed to process recording: ${error.message}`,
         error.stack,

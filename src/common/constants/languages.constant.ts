@@ -106,7 +106,7 @@ export const LANGUAGES: Record<string, LanguageConfig> = {
 
     stt: {
       provider: 'whisper',
-      model: 'whisper-large-v3',
+      model: '@cf/openai/whisper',
       languageCode: 'ar',
     },
 
@@ -137,13 +137,77 @@ export const LANGUAGES: Record<string, LanguageConfig> = {
       expectedResponseTime: 2000, // 2 seconds
     },
   },
+
+  en: {
+    code: 'en',
+    name: 'English',
+    nativeName: 'English',
+    direction: 'ltr',
+
+    dialects: [
+      {
+        code: 'us',
+        name: 'American English',
+        nativeName: 'American English',
+        region: 'United States',
+        fillerWords: ['um', 'uh', 'like', 'you know', 'so'],
+        commonGreetings: ['hello', 'hi', 'hey'],
+        commonFarewells: ['goodbye', 'bye', 'see you'],
+        features: {
+          formalLevel: 'mixed',
+          speedOfSpeech: 'medium',
+        },
+      },
+    ],
+    defaultDialect: 'us',
+
+    stt: {
+      provider: 'whisper',
+      model: '@cf/openai/whisper',
+      languageCode: 'en',
+    },
+
+    tts: {
+      provider: 'elevenlabs',
+      voiceId: 'EXAVITQu4vr4xnSDxMaL',
+      languageCode: 'en',
+    },
+
+    llm: {
+      provider: 'cloudflare',
+      model: '@cf/meta/llama-3.1-8b-instruct',
+    },
+
+    features: {
+      dialectSupport: false,
+      genderVariation: true,
+      formalInformalVariation: true,
+    },
+
+    fillerWords: ['um', 'uh', 'like', 'you know'],
+    commonGreetings: ['hello', 'hi', 'hey'],
+    commonFarewells: ['goodbye', 'bye', 'see you'],
+
+    evaluation: {
+      minConfidenceScore: 0.8,
+      expectedResponseTime: 1500,
+    },
+  },
 };
 
 /**
  * Get language configuration by code
+ * Supports both full codes (en-US) and base codes (en)
  */
 export function getLanguageConfig(code: string): LanguageConfig | undefined {
-  return LANGUAGES[code];
+  if (!code) return undefined;
+  
+  // Try exact match first
+  if (LANGUAGES[code]) return LANGUAGES[code];
+  
+  // Extract base language code (en-US -> en)
+  const baseCode = code.split('-')[0].toLowerCase();
+  return LANGUAGES[baseCode];
 }
 
 /**

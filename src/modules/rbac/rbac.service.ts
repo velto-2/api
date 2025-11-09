@@ -303,7 +303,7 @@ export class RbacService {
     roleId: string,
     permissionKeys: string[],
   ) {
-    // Parse permission keys (e.g., "JOB_REQUEST.CREATE")
+    // Parse permission keys (e.g., "TEST.CREATE")
     const permissions = await Promise.all(
       permissionKeys.map(async (key) => {
         const [resource, action] = key.split('.');
@@ -322,13 +322,22 @@ export class RbacService {
     const validPermissions = permissions.filter((p) => p !== null);
 
     if (validPermissions.length > 0) {
-      await this.prisma.rolePermission.createMany({
-        data: validPermissions.map((permission) => ({
-          roleId,
-          permissionId: permission.id,
-        })),
-        skipDuplicates: true,
-      });
+      // MongoDB doesn't support skipDuplicates, so we need to check manually
+      for (const permission of validPermissions) {
+        try {
+          await this.prisma.rolePermission.create({
+            data: {
+              roleId,
+              permissionId: permission.id,
+            },
+          });
+        } catch (error) {
+          // Ignore duplicate errors
+          if (!error.message?.includes('duplicate')) {
+            throw error;
+          }
+        }
+      }
 
       this.logger.log(
         `Assigned ${validPermissions.length} permissions to role ${roleId}`,
@@ -382,11 +391,94 @@ export class RbacService {
    * Assign role to user
    */
   async assignRoleToUser(data: AssignRoleDto) {
+    // Get the role and user to check if we need to create an org copy
+    const role = await this.prisma.role.findUnique({
+      where: { id: data.roleId },
+      include: {
+        permissions: {
+          include: {
+            permission: true,
+          },
+        },
+      },
+    });
+
+    if (!role) {
+      throw new Error('Role not found');
+    }
+
+    // Get user to find their organization
+    const user = await this.prisma.user.findUnique({
+      where: { id: data.userId },
+      select: { organizationId: true },
+    });
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    let roleIdToAssign = data.roleId;
+
+    // If this is a system organization role template, create an org copy first
+    if (
+      role.scope === RoleScope.ORGANIZATION &&
+      role.isSystem &&
+      role.organizationId === null &&
+      user.organizationId
+    ) {
+      // Check if org copy already exists
+      let orgRole = await this.prisma.role.findFirst({
+        where: {
+          name: role.name,
+          scope: RoleScope.ORGANIZATION,
+          organizationId: user.organizationId,
+        },
+      });
+
+      if (!orgRole) {
+        // Create organization copy
+        orgRole = await this.prisma.role.create({
+          data: {
+            name: role.name,
+            slug: role.slug,
+            description: role.description,
+            scope: RoleScope.ORGANIZATION,
+            organizationId: user.organizationId,
+            isSystem: false,
+            color: role.color,
+            icon: role.icon,
+          },
+        });
+
+        // Copy permissions
+        for (const rp of role.permissions) {
+          try {
+            await this.prisma.rolePermission.create({
+              data: {
+                roleId: orgRole.id,
+                permissionId: rp.permission.id,
+              },
+            });
+          } catch (error: any) {
+            if (error.code !== 'P2002') {
+              throw error;
+            }
+          }
+        }
+
+        this.logger.log(
+          `Created organization copy of role ${role.name} for organization ${user.organizationId}`,
+        );
+      }
+
+      roleIdToAssign = orgRole.id;
+    }
+
     const existingAssignment = await this.prisma.userRole.findUnique({
       where: {
         userId_roleId: {
           userId: data.userId,
-          roleId: data.roleId,
+          roleId: roleIdToAssign,
         },
       },
     });
@@ -398,14 +490,14 @@ export class RbacService {
     const userRole = await this.prisma.userRole.create({
       data: {
         userId: data.userId,
-        roleId: data.roleId,
+        roleId: roleIdToAssign,
         assignedBy: data.assignedBy,
         expiresAt: data.expiresAt,
       },
     });
 
     this.logger.log(
-      `Assigned role ${data.roleId} to user ${data.userId}`,
+      `Assigned role ${roleIdToAssign} to user ${data.userId}`,
     );
 
     return userRole;
@@ -504,6 +596,7 @@ export class RbacService {
 
   /**
    * List all roles for an organization
+   * Returns: GLOBAL roles + organization-specific roles + system organization role templates
    */
   async getRoles(organizationId?: string) {
     return this.prisma.role.findMany({
@@ -514,6 +607,12 @@ export class RbacService {
           {
             scope: RoleScope.ORGANIZATION,
             organizationId,
+          },
+          // Also include system organization roles as templates (for organizations that haven't created copies yet)
+          {
+            scope: RoleScope.ORGANIZATION,
+            isSystem: true,
+            organizationId: null,
           },
         ],
       },

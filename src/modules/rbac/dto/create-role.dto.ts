@@ -18,7 +18,7 @@ export class CreateRoleRequestDto {
 
   @ApiProperty({ 
     description: 'List of permission keys', 
-    example: ['JOB_REQUEST.CREATE', 'JOB_REQUEST.READ', 'OFFER.READ'],
+    example: ['TEST.CREATE', 'TEST.READ', 'TEST_RUN.EXECUTE'],
     type: [String]
   })
   @IsArray()

@@ -4,7 +4,7 @@ import { IsString, IsOptional, IsDateString, IsObject } from 'class-validator';
 export class AssignPermissionRequestDto {
   @ApiProperty({ 
     description: 'Permission key to assign', 
-    example: 'JOB_REQUEST.CREATE' 
+    example: 'TEST.CREATE' 
   })
   @IsString()
   permission: string;

@@ -22,7 +22,7 @@ export class UpdateRoleRequestDto {
 
   @ApiProperty({ 
     description: 'List of permission keys', 
-    example: ['JOB_REQUEST.CREATE', 'JOB_REQUEST.UPDATE', 'OFFER.APPROVE'],
+    example: ['TEST.CREATE', 'TEST.UPDATE', 'TEST_RUN.EXECUTE'],
     type: [String],
     required: false
   })

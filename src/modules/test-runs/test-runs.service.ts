@@ -132,6 +132,140 @@ export class TestRunsService {
     }) as TestRunDocument[];
   }
 
+  async getAnalytics(query: {
+    dateFrom?: string;
+    dateTo?: string;
+    testConfigId?: string;
+  }) {
+    const filter: any = {};
+
+    if (query.dateFrom || query.dateTo) {
+      filter.createdAt = {};
+      if (query.dateFrom) {
+        filter.createdAt.$gte = new Date(query.dateFrom);
+      }
+      if (query.dateTo) {
+        filter.createdAt.$lte = new Date(query.dateTo);
+      }
+    }
+
+    if (query.testConfigId) {
+      filter.testConfigId = new Types.ObjectId(query.testConfigId);
+    }
+
+    const testRuns = await this.testRunModel.find(filter).lean().exec();
+
+    const totalRuns = testRuns.length;
+    const completedRuns = testRuns.filter((r) => r.status === 'completed').length;
+    const failedRuns = testRuns.filter((r) => r.status === 'failed').length;
+    const pendingRuns = testRuns.filter((r) => r.status === 'pending').length;
+    const runningRuns = testRuns.filter((r) => r.status === 'running').length;
+
+    const successRate =
+      totalRuns > 0 ? (completedRuns / totalRuns) * 100 : 0;
+
+    // Calculate average scores
+    const scores = testRuns
+      .map((r) => r.evaluation?.overallScore)
+      .filter((s) => s !== undefined && s !== null) as number[];
+    const averageScore =
+      scores.length > 0
+        ? scores.reduce((a, b) => a + b, 0) / scores.length
+        : 0;
+
+    // Calculate average latency
+    const latencies = testRuns
+      .map((r) => r.evaluation?.averageLatency)
+      .filter((l) => l !== undefined && l !== null) as number[];
+    const averageLatency =
+      latencies.length > 0
+        ? latencies.reduce((a, b) => a + b, 0) / latencies.length
+        : 0;
+
+    // Grade distribution
+    const gradeDistribution = {
+      A: testRuns.filter((r) => r.evaluation?.grade === 'A').length,
+      B: testRuns.filter((r) => r.evaluation?.grade === 'B').length,
+      C: testRuns.filter((r) => r.evaluation?.grade === 'C').length,
+      D: testRuns.filter((r) => r.evaluation?.grade === 'D').length,
+      F: testRuns.filter((r) => r.evaluation?.grade === 'F').length,
+    };
+
+    // Group by date for trends
+    const dateGroups = new Map<string, any>();
+    testRuns.forEach((run: any) => {
+      const createdAt = run.createdAt || run.startedAt || new Date();
+      const date = new Date(createdAt).toISOString().split('T')[0];
+      if (!dateGroups.has(date)) {
+        dateGroups.set(date, {
+          date,
+          testRuns: 0,
+          completed: 0,
+          failed: 0,
+          averageScore: 0,
+          averageLatency: 0,
+          scores: [],
+          latencies: [],
+        });
+      }
+      const group = dateGroups.get(date)!;
+      group.testRuns++;
+      if (run.status === 'completed') group.completed++;
+      if (run.status === 'failed') group.failed++;
+      if (run.evaluation?.overallScore) {
+        group.scores.push(run.evaluation.overallScore);
+      }
+      if (run.evaluation?.averageLatency) {
+        group.latencies.push(run.evaluation.averageLatency);
+      }
+    });
+
+    // Calculate averages for each date
+    const trends = Array.from(dateGroups.values())
+      .map((group) => ({
+        date: group.date,
+        testRuns: group.testRuns,
+        completed: group.completed,
+        failed: group.failed,
+        successRate:
+          group.testRuns > 0
+            ? (group.completed / group.testRuns) * 100
+            : 0,
+        averageScore:
+          group.scores.length > 0
+            ? group.scores.reduce((a: number, b: number) => a + b, 0) /
+              group.scores.length
+            : 0,
+        averageLatency:
+          group.latencies.length > 0
+            ? group.latencies.reduce((a: number, b: number) => a + b, 0) /
+              group.latencies.length
+            : 0,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return {
+      summary: {
+        totalRuns,
+        completedRuns,
+        failedRuns,
+        pendingRuns,
+        runningRuns,
+        successRate: Math.round(successRate * 100) / 100,
+        averageScore: Math.round(averageScore * 100) / 100,
+        averageLatency: Math.round(averageLatency),
+      },
+      statusDistribution: {
+        completed: completedRuns,
+        failed: failedRuns,
+        pending: pendingRuns,
+        running: runningRuns,
+      },
+      gradeDistribution,
+      trends,
+    };
+  }
+
   async updateTestRunStatus(
     id: string,
     status: string,
@@ -184,8 +318,10 @@ export class TestRunsService {
         testConfig.scenarioTemplate,
       );
 
-      // Get webhook base URL
+      // Get webhook base URL (provider-agnostic)
+      const providerName = this.configService.get<string>('telephony.provider') || 'twilio';
       const webhookBaseUrl =
+        this.configService.get<string>(`${providerName}.webhookBaseUrl`) ||
         this.configService.get<string>('twilio.webhookBaseUrl') ||
         'http://localhost:3000';
 
@@ -194,7 +330,7 @@ export class TestRunsService {
         `Initiating call to ${testConfig.agentEndpoint} with webhook: ${webhookUrl}`,
       );
 
-      // Initiate Twilio call
+      // Initiate call via telephony provider
       const call = await this.telephonyService.initiateCall({
         toNumber: testConfig.agentEndpoint,
         testRunId,

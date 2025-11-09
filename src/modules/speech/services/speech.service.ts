@@ -25,37 +25,44 @@ export class SpeechService {
     languageCode: string,
     options?: TranscriptionOptions,
   ): Promise<TranscriptionResult> {
-    const languageConfig = getLanguageConfig(languageCode);
-
-    if (!languageConfig) {
-      throw new Error(`Language ${languageCode} is not supported`);
+    // Handle auto-detection
+    const isAuto = languageCode === 'auto' || !languageCode;
+    
+    let languageConfig;
+    let finalLanguageCode = languageCode;
+    
+    if (!isAuto) {
+      languageConfig = getLanguageConfig(languageCode);
+      if (!languageConfig) {
+        this.logger.warn(`Language ${languageCode} not found, using auto-detection`);
+        finalLanguageCode = 'auto';
+      }
     }
 
-    const providerName = languageConfig.stt.provider;
+    const providerName = languageConfig?.stt.provider || 'whisper';
     const provider = this.providers.get(providerName);
 
     if (!provider) {
       throw new Error(`STT provider ${providerName} is not available`);
     }
 
-    if (!provider.supports(languageCode)) {
-      throw new Error(
-        `Provider ${providerName} does not support language ${languageCode}`,
-      );
+    // For auto-detection, skip language validation
+    if (!isAuto && !provider.supports(finalLanguageCode)) {
+      this.logger.warn(`Provider doesn't support ${finalLanguageCode}, using auto-detection`);
+      finalLanguageCode = 'auto';
     }
 
-    // Use language-specific model if available
     const transcriptionOptions: TranscriptionOptions = {
       ...options,
-      model: languageConfig.stt.model || options?.model,
-      language: languageConfig.stt.languageCode,
+      model: languageConfig?.stt.model || options?.model || '@cf/openai/whisper',
+      language: isAuto ? undefined : languageConfig?.stt.languageCode,
     };
 
     this.logger.log(
-      `Transcribing audio in ${languageCode} using ${providerName}`,
+      `Transcribing audio${isAuto ? ' (auto-detect)' : ` in ${finalLanguageCode}`} using ${providerName}`,
     );
 
-    return provider.transcribe(audio, languageCode, transcriptionOptions);
+    return provider.transcribe(audio, finalLanguageCode, transcriptionOptions);
   }
 }
 

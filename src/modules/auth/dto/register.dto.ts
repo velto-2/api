@@ -3,10 +3,10 @@ import { ApiProperty } from '@nestjs/swagger';
 // import { OrganizationType } from '@prisma/client';
 
 export class RegisterDto {
-  @ApiProperty({ example: 'EMPLOYER', enum: ['EMPLOYER', 'AGENCY', 'ADMIN'] })
-  @IsEnum(['EMPLOYER', 'AGENCY', 'ADMIN'])
+  @ApiProperty({ example: 'CLIENT', enum: ['CLIENT'], description: 'Organization type - only CLIENT allowed for registration' })
+  @IsEnum(['CLIENT'])
   @IsNotEmpty()
-  organizationType: 'EMPLOYER' | 'AGENCY' | 'ADMIN';
+  organizationType: 'CLIENT';
 
   // Organization Details
   @ApiProperty({ example: 'Acme Corporation' })

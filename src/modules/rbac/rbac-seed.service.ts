@@ -28,52 +28,39 @@ export class RbacSeedService {
    */
   private async seedPermissions() {
     const permissions: CreatePermissionDto[] = [
-      // Job Management
-      { resource: PermissionResource.JOB_REQUEST, action: PermissionAction.CREATE, name: 'Create Job Request', description: 'Create new job requests' },
-      { resource: PermissionResource.JOB_REQUEST, action: PermissionAction.READ, name: 'Read Job Request', description: 'View job requests' },
-      { resource: PermissionResource.JOB_REQUEST, action: PermissionAction.UPDATE, name: 'Update Job Request', description: 'Edit job requests' },
-      { resource: PermissionResource.JOB_REQUEST, action: PermissionAction.DELETE, name: 'Delete Job Request', description: 'Delete job requests' },
+      // Test Management
+      { resource: PermissionResource.TEST, action: PermissionAction.CREATE, name: 'Create Test', description: 'Create new test configurations' },
+      { resource: PermissionResource.TEST, action: PermissionAction.READ, name: 'Read Test', description: 'View test configurations' },
+      { resource: PermissionResource.TEST, action: PermissionAction.UPDATE, name: 'Update Test', description: 'Edit test configurations' },
+      { resource: PermissionResource.TEST, action: PermissionAction.DELETE, name: 'Delete Test', description: 'Delete test configurations' },
 
-      // Offer Management
-      { resource: PermissionResource.OFFER, action: PermissionAction.CREATE, name: 'Create Offer', description: 'Submit offers for job requests' },
-      { resource: PermissionResource.OFFER, action: PermissionAction.READ, name: 'Read Offer', description: 'View offers' },
-      { resource: PermissionResource.OFFER, action: PermissionAction.UPDATE, name: 'Update Offer', description: 'Edit offers' },
-      { resource: PermissionResource.OFFER, action: PermissionAction.DELETE, name: 'Delete Offer', description: 'Delete offers' },
-      { resource: PermissionResource.OFFER, action: PermissionAction.APPROVE, name: 'Approve Offer', description: 'Accept or reject offers' },
+      // Test Run Management
+      { resource: PermissionResource.TEST_RUN, action: PermissionAction.CREATE, name: 'Create Test Run', description: 'Create new test runs' },
+      { resource: PermissionResource.TEST_RUN, action: PermissionAction.READ, name: 'Read Test Run', description: 'View test run results' },
+      { resource: PermissionResource.TEST_RUN, action: PermissionAction.EXECUTE, name: 'Execute Test Run', description: 'Execute test runs' },
+      { resource: PermissionResource.TEST_RUN, action: PermissionAction.CANCEL, name: 'Cancel Test Run', description: 'Cancel running test runs' },
+      { resource: PermissionResource.TEST_RUN, action: PermissionAction.DELETE, name: 'Delete Test Run', description: 'Delete test runs' },
 
-      // Contract Management
-      { resource: PermissionResource.CONTRACT, action: PermissionAction.CREATE, name: 'Create Contract', description: 'Generate contracts from offers' },
-      { resource: PermissionResource.CONTRACT, action: PermissionAction.READ, name: 'Read Contract', description: 'View contracts' },
-      { resource: PermissionResource.CONTRACT, action: PermissionAction.UPDATE, name: 'Update Contract', description: 'Edit contract details' },
-      { resource: PermissionResource.CONTRACT, action: PermissionAction.DELETE, name: 'Delete Contract', description: 'Cancel contracts' },
-      { resource: PermissionResource.CONTRACT, action: PermissionAction.SIGN, name: 'Sign Contract', description: 'Digitally sign contracts' },
+      // Imported Call Management
+      { resource: PermissionResource.IMPORTED_CALL, action: PermissionAction.IMPORT, name: 'Import Call', description: 'Import call recordings' },
+      { resource: PermissionResource.IMPORTED_CALL, action: PermissionAction.READ, name: 'Read Imported Call', description: 'View imported calls' },
+      { resource: PermissionResource.IMPORTED_CALL, action: PermissionAction.ANALYZE, name: 'Analyze Call', description: 'Analyze imported calls' },
+      { resource: PermissionResource.IMPORTED_CALL, action: PermissionAction.DELETE, name: 'Delete Imported Call', description: 'Delete imported calls' },
 
-      // Worker Management
-      { resource: PermissionResource.WORKER, action: PermissionAction.CREATE, name: 'Create Worker', description: 'Add new workers' },
-      { resource: PermissionResource.WORKER, action: PermissionAction.READ, name: 'Read Worker', description: 'View worker profiles' },
-      { resource: PermissionResource.WORKER, action: PermissionAction.UPDATE, name: 'Update Worker', description: 'Edit worker information' },
-      { resource: PermissionResource.WORKER, action: PermissionAction.DELETE, name: 'Delete Worker', description: 'Remove workers' },
-      { resource: PermissionResource.WORKER, action: PermissionAction.ASSIGN, name: 'Assign Worker', description: 'Assign workers to contracts' },
+      // Speech Services
+      { resource: PermissionResource.SPEECH, action: PermissionAction.TRANSCRIBE, name: 'Transcribe Speech', description: 'Transcribe audio to text' },
+      { resource: PermissionResource.SPEECH, action: PermissionAction.SYNTHESIZE, name: 'Synthesize Speech', description: 'Generate speech from text' },
+      { resource: PermissionResource.SPEECH, action: PermissionAction.READ, name: 'Read Speech', description: 'View speech service data' },
 
-      // Timesheet Management
-      { resource: PermissionResource.TIMESHEET, action: PermissionAction.CREATE, name: 'Create Timesheet', description: 'Submit timesheets' },
-      { resource: PermissionResource.TIMESHEET, action: PermissionAction.READ, name: 'Read Timesheet', description: 'View timesheets' },
-      { resource: PermissionResource.TIMESHEET, action: PermissionAction.UPDATE, name: 'Update Timesheet', description: 'Edit timesheets' },
-      { resource: PermissionResource.TIMESHEET, action: PermissionAction.DELETE, name: 'Delete Timesheet', description: 'Delete timesheets' },
-      { resource: PermissionResource.TIMESHEET, action: PermissionAction.APPROVE, name: 'Approve Timesheet', description: 'Approve or reject timesheets' },
+      // Digital Human
+      { resource: PermissionResource.DIGITAL_HUMAN, action: PermissionAction.CONFIGURE, name: 'Configure Digital Human', description: 'Configure digital human settings' },
+      { resource: PermissionResource.DIGITAL_HUMAN, action: PermissionAction.READ, name: 'Read Digital Human', description: 'View digital human configurations' },
+      { resource: PermissionResource.DIGITAL_HUMAN, action: PermissionAction.UPDATE, name: 'Update Digital Human', description: 'Update digital human settings' },
 
-      // Invoice Management
-      { resource: PermissionResource.INVOICE, action: PermissionAction.CREATE, name: 'Create Invoice', description: 'Generate invoices' },
-      { resource: PermissionResource.INVOICE, action: PermissionAction.READ, name: 'Read Invoice', description: 'View invoices' },
-      { resource: PermissionResource.INVOICE, action: PermissionAction.UPDATE, name: 'Update Invoice', description: 'Edit invoices' },
-      { resource: PermissionResource.INVOICE, action: PermissionAction.DELETE, name: 'Delete Invoice', description: 'Cancel invoices' },
-      { resource: PermissionResource.INVOICE, action: PermissionAction.APPROVE, name: 'Approve Invoice', description: 'Approve invoices for payment' },
-
-      // Payment Management
-      { resource: PermissionResource.PAYMENT, action: PermissionAction.CREATE, name: 'Create Payment', description: 'Process payments' },
-      { resource: PermissionResource.PAYMENT, action: PermissionAction.READ, name: 'Read Payment', description: 'View payment records' },
-      { resource: PermissionResource.PAYMENT, action: PermissionAction.UPDATE, name: 'Update Payment', description: 'Edit payment details' },
-      { resource: PermissionResource.PAYMENT, action: PermissionAction.DELETE, name: 'Delete Payment', description: 'Cancel payments' },
+      // Telephony
+      { resource: PermissionResource.TELEPHONY, action: PermissionAction.INITIATE, name: 'Initiate Call', description: 'Initiate phone calls' },
+      { resource: PermissionResource.TELEPHONY, action: PermissionAction.READ, name: 'Read Telephony', description: 'View call details' },
+      { resource: PermissionResource.TELEPHONY, action: PermissionAction.CONFIGURE, name: 'Configure Telephony', description: 'Configure telephony settings' },
 
       // Organization Management
       { resource: PermissionResource.ORGANIZATION, action: PermissionAction.CREATE, name: 'Create Organization', description: 'Register new organizations' },
@@ -129,17 +116,16 @@ export class RbacSeedService {
     const systemRoles = [
       {
         name: 'Super Admin',
-        description: 'Full system access',
+        description: 'Full system access for Velto team',
         scope: RoleScope.GLOBAL,
         permissions: [
           // All permissions - super admin has everything
-          'JOB_REQUEST.CREATE', 'JOB_REQUEST.READ', 'JOB_REQUEST.UPDATE', 'JOB_REQUEST.DELETE',
-          'OFFER.CREATE', 'OFFER.READ', 'OFFER.UPDATE', 'OFFER.DELETE', 'OFFER.APPROVE',
-          'CONTRACT.CREATE', 'CONTRACT.READ', 'CONTRACT.UPDATE', 'CONTRACT.DELETE', 'CONTRACT.SIGN',
-          'WORKER.CREATE', 'WORKER.READ', 'WORKER.UPDATE', 'WORKER.DELETE', 'WORKER.ASSIGN',
-          'TIMESHEET.CREATE', 'TIMESHEET.READ', 'TIMESHEET.UPDATE', 'TIMESHEET.DELETE', 'TIMESHEET.APPROVE',
-          'INVOICE.CREATE', 'INVOICE.READ', 'INVOICE.UPDATE', 'INVOICE.DELETE', 'INVOICE.APPROVE',
-          'PAYMENT.CREATE', 'PAYMENT.READ', 'PAYMENT.UPDATE', 'PAYMENT.DELETE',
+          'TEST.CREATE', 'TEST.READ', 'TEST.UPDATE', 'TEST.DELETE',
+          'TEST_RUN.CREATE', 'TEST_RUN.READ', 'TEST_RUN.EXECUTE', 'TEST_RUN.CANCEL', 'TEST_RUN.DELETE',
+          'IMPORTED_CALL.IMPORT', 'IMPORTED_CALL.READ', 'IMPORTED_CALL.ANALYZE', 'IMPORTED_CALL.DELETE',
+          'SPEECH.TRANSCRIBE', 'SPEECH.SYNTHESIZE', 'SPEECH.READ',
+          'DIGITAL_HUMAN.CONFIGURE', 'DIGITAL_HUMAN.READ', 'DIGITAL_HUMAN.UPDATE',
+          'TELEPHONY.INITIATE', 'TELEPHONY.READ', 'TELEPHONY.CONFIGURE',
           'ORGANIZATION.CREATE', 'ORGANIZATION.READ', 'ORGANIZATION.UPDATE', 'ORGANIZATION.DELETE',
           'USER.CREATE', 'USER.READ', 'USER.UPDATE', 'USER.DELETE',
           'ROLE.CREATE', 'ROLE.READ', 'ROLE.UPDATE', 'ROLE.DELETE',
@@ -152,97 +138,60 @@ export class RbacSeedService {
         icon: 'shield-exclamation',
       },
       {
-        name: 'Employer Admin',
-        description: 'Full access for employer organization',
+        name: 'Client Admin',
+        description: 'Full access for client organization',
         scope: RoleScope.ORGANIZATION,
         permissions: [
-          'JOB_REQUEST.CREATE', 'JOB_REQUEST.READ', 'JOB_REQUEST.UPDATE', 'JOB_REQUEST.DELETE',
-          'OFFER.READ', 'OFFER.APPROVE',
-          'CONTRACT.READ', 'CONTRACT.SIGN',
-          'TIMESHEET.READ', 'TIMESHEET.APPROVE',
-          'INVOICE.READ', 'INVOICE.APPROVE',
-          'PAYMENT.CREATE', 'PAYMENT.READ',
+          'TEST.CREATE', 'TEST.READ', 'TEST.UPDATE', 'TEST.DELETE',
+          'TEST_RUN.CREATE', 'TEST_RUN.READ', 'TEST_RUN.EXECUTE', 'TEST_RUN.CANCEL', 'TEST_RUN.DELETE',
+          'IMPORTED_CALL.IMPORT', 'IMPORTED_CALL.READ', 'IMPORTED_CALL.ANALYZE', 'IMPORTED_CALL.DELETE',
+          'SPEECH.TRANSCRIBE', 'SPEECH.SYNTHESIZE', 'SPEECH.READ',
+          'DIGITAL_HUMAN.CONFIGURE', 'DIGITAL_HUMAN.READ', 'DIGITAL_HUMAN.UPDATE',
+          'TELEPHONY.INITIATE', 'TELEPHONY.READ',
           'ORGANIZATION.READ', 'ORGANIZATION.UPDATE',
           'USER.CREATE', 'USER.READ', 'USER.UPDATE', 'USER.DELETE',
           'ROLE.CREATE', 'ROLE.READ', 'ROLE.UPDATE', 'ROLE.DELETE',
           'PERMISSION.READ',
           'ANALYTICS.READ',
+          'SETTINGS.READ', 'SETTINGS.UPDATE',
         ],
         color: '#2563EB',
         icon: 'building-office',
       },
       {
-        name: 'Agency Admin',
-        description: 'Full access for agency organization',
+        name: 'Test Manager',
+        description: 'Manage tests and test runs',
         scope: RoleScope.ORGANIZATION,
         permissions: [
-          'JOB_REQUEST.READ',
-          'OFFER.CREATE', 'OFFER.READ', 'OFFER.UPDATE', 'OFFER.DELETE',
-          'CONTRACT.READ', 'CONTRACT.SIGN',
-          'WORKER.CREATE', 'WORKER.READ', 'WORKER.UPDATE', 'WORKER.DELETE', 'WORKER.ASSIGN',
-          'TIMESHEET.CREATE', 'TIMESHEET.READ', 'TIMESHEET.UPDATE',
-          'INVOICE.CREATE', 'INVOICE.READ',
-          'PAYMENT.READ',
-          'ORGANIZATION.READ', 'ORGANIZATION.UPDATE',
-          'USER.CREATE', 'USER.READ', 'USER.UPDATE', 'USER.DELETE',
-          'ROLE.CREATE', 'ROLE.READ', 'ROLE.UPDATE', 'ROLE.DELETE',
-          'PERMISSION.READ',
-          'ANALYTICS.READ',
-        ],
-        color: '#059669',
-        icon: 'user-group',
-      },
-      {
-        name: 'Employer Manager',
-        description: 'Job and contract management for employers',
-        scope: RoleScope.ORGANIZATION,
-        permissions: [
-          'JOB_REQUEST.CREATE', 'JOB_REQUEST.READ', 'JOB_REQUEST.UPDATE',
-          'OFFER.READ', 'OFFER.APPROVE',
-          'CONTRACT.READ', 'CONTRACT.SIGN',
-          'TIMESHEET.READ', 'TIMESHEET.APPROVE',
-          'INVOICE.READ',
-          'PAYMENT.READ',
+          'TEST.CREATE', 'TEST.READ', 'TEST.UPDATE', 'TEST.DELETE',
+          'TEST_RUN.CREATE', 'TEST_RUN.READ', 'TEST_RUN.EXECUTE', 'TEST_RUN.CANCEL', 'TEST_RUN.DELETE',
+          'IMPORTED_CALL.IMPORT', 'IMPORTED_CALL.READ', 'IMPORTED_CALL.ANALYZE',
+          'SPEECH.TRANSCRIBE', 'SPEECH.SYNTHESIZE', 'SPEECH.READ',
+          'DIGITAL_HUMAN.READ', 'DIGITAL_HUMAN.UPDATE',
+          'TELEPHONY.INITIATE', 'TELEPHONY.READ',
           'ORGANIZATION.READ',
           'USER.READ',
+          'ANALYTICS.READ',
         ],
         color: '#7C3AED',
         icon: 'briefcase',
-      },
-      {
-        name: 'Agency Manager',
-        description: 'Worker and offer management for agencies',
-        scope: RoleScope.ORGANIZATION,
-        permissions: [
-          'JOB_REQUEST.READ',
-          'OFFER.CREATE', 'OFFER.READ', 'OFFER.UPDATE',
-          'CONTRACT.READ',
-          'WORKER.CREATE', 'WORKER.READ', 'WORKER.UPDATE', 'WORKER.ASSIGN',
-          'TIMESHEET.CREATE', 'TIMESHEET.READ', 'TIMESHEET.UPDATE',
-          'INVOICE.READ',
-          'PAYMENT.READ',
-          'ORGANIZATION.READ',
-          'USER.READ',
-        ],
-        color: '#EA580C',
-        icon: 'users',
       },
       {
         name: 'Viewer',
         description: 'Read-only access',
         scope: RoleScope.ORGANIZATION,
         permissions: [
-          'JOB_REQUEST.READ',
-          'OFFER.READ',
-          'CONTRACT.READ',
-          'WORKER.READ',
-          'TIMESHEET.READ',
-          'INVOICE.READ',
-          'PAYMENT.READ',
+          'TEST.READ',
+          'TEST_RUN.READ',
+          'IMPORTED_CALL.READ',
+          'SPEECH.READ',
+          'DIGITAL_HUMAN.READ',
+          'TELEPHONY.READ',
           'ORGANIZATION.READ',
           'USER.READ',
           'ROLE.READ',
           'PERMISSION.READ',
+          'ANALYTICS.READ',
         ],
         color: '#6B7280',
         icon: 'eye',
@@ -283,12 +232,10 @@ export class RbacSeedService {
   /**
    * Create default roles for a new organization
    */
-  async seedOrganizationRoles(organizationId: string, organizationType: 'EMPLOYER' | 'AGENCY') {
-    const defaultRoles = organizationType === 'EMPLOYER' 
-      ? ['Employer Admin', 'Employer Manager', 'Viewer']
-      : ['Agency Admin', 'Agency Manager', 'Viewer'];
+  async seedOrganizationRoles(organizationId: string) {
+    const defaultRoles = ['Client Admin', 'Test Manager', 'Viewer'];
 
-    this.logger.log(`Creating default roles for ${organizationType} organization: ${organizationId}`);
+    this.logger.log(`Creating default roles for organization: ${organizationId}`);
 
     for (const roleName of defaultRoles) {
       try {
