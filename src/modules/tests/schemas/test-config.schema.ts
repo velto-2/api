@@ -30,6 +30,12 @@ export class TestConfig {
   @Prop({ required: true })
   name: string;
 
+  @Prop({ required: true, index: true })
+  customerId: string; // Organization/user ID
+
+  @Prop({ required: true, index: true })
+  agentId: string; // Agent identifier
+
   @Prop({ required: true })
   agentEndpoint: string; // Phone number or endpoint to call
 
@@ -62,6 +68,9 @@ TestConfigSchema.set('toJSON', {
 });
 
 // Indexes for performance
+TestConfigSchema.index({ customerId: 1, agentId: 1 });
+TestConfigSchema.index({ agentId: 1 });
+TestConfigSchema.index({ customerId: 1 });
 TestConfigSchema.index({ agentEndpoint: 1 });
 TestConfigSchema.index({ 'language.code': 1 });
 TestConfigSchema.index({ isActive: 1 });

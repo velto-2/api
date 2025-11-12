@@ -1,6 +1,6 @@
 /**
  * Language Configuration System
- * 
+ *
  * This file contains all language-specific configurations in a centralized location.
  * Adding a new language requires only adding configuration here - no code changes needed.
  */
@@ -31,7 +31,7 @@ export interface LanguageConfig {
 
   // AI Service configurations
   stt: {
-    provider: 'whisper' | 'azure' | 'google';
+    provider: 'whisper' | 'huggingface' | 'azure' | 'google';
     model?: string;
     languageCode: string; // Provider-specific code
   };
@@ -43,7 +43,7 @@ export interface LanguageConfig {
   };
 
   llm: {
-    provider: 'cloudflare' | 'anthropic' | 'openai';
+    provider: 'cloudflare' | 'anthropic' | 'openai' | 'huggingface';
     model?: string;
     systemPromptTemplate?: string;
   };
@@ -105,8 +105,8 @@ export const LANGUAGES: Record<string, LanguageConfig> = {
     defaultDialect: 'egyptian',
 
     stt: {
-      provider: 'whisper',
-      model: '@cf/openai/whisper',
+      provider: 'huggingface', // Can be changed to 'whisper' or 'huggingface'
+      model: 'facebook/wav2vec2-large-xlsr-53-arabic', // HuggingFace model for Arabic
       languageCode: 'ar',
     },
 
@@ -116,9 +116,15 @@ export const LANGUAGES: Record<string, LanguageConfig> = {
       languageCode: 'ar',
     },
 
+    // llm: {
+    //   provider: 'cloudflare',
+    //   model: '@cf/meta/llama-3.1-8b-instruct',
+    //   systemPromptTemplate: 'arabic-prompt-template',
+    // },
+
     llm: {
-      provider: 'cloudflare',
-      model: '@cf/meta/llama-3.1-8b-instruct',
+      provider: 'huggingface', // Changed from 'cloudflare'
+      model: 'tiiuae/falcon-7b-instruct', // or falcon-40b-instruct, falcon-180b-chat
       systemPromptTemplate: 'arabic-prompt-template',
     },
 
@@ -162,8 +168,10 @@ export const LANGUAGES: Record<string, LanguageConfig> = {
     defaultDialect: 'us',
 
     stt: {
-      provider: 'whisper',
-      model: '@cf/openai/whisper',
+      provider: 'huggingface',
+      model: 'nadsoft/hamsa-v0.1-beta',
+      // model: '@cf/openai/whisper-large-v3-turbo',
+
       languageCode: 'en',
     },
 
@@ -201,10 +209,10 @@ export const LANGUAGES: Record<string, LanguageConfig> = {
  */
 export function getLanguageConfig(code: string): LanguageConfig | undefined {
   if (!code) return undefined;
-  
+
   // Try exact match first
   if (LANGUAGES[code]) return LANGUAGES[code];
-  
+
   // Extract base language code (en-US -> en)
   const baseCode = code.split('-')[0].toLowerCase();
   return LANGUAGES[baseCode];
@@ -229,5 +237,3 @@ export function getDialectConfig(
 export function isLanguageSupported(code: string): boolean {
   return code in LANGUAGES;
 }
-
-

@@ -13,6 +13,7 @@ import {
   Body,
   UseGuards,
   HttpException,
+  Request,
   HttpStatus,
   Delete,
   Patch,
@@ -28,16 +29,14 @@ import { WebhookService } from './services/webhook.service';
 import { PerformanceMonitorService } from './services/performance-monitor.service';
 import { CacheService } from './services/cache.service';
 import { RateLimitService } from './services/rate-limit.service';
+import { ExportService } from './services/export.service';
 import {
   RateLimitGuard,
   RateLimit,
 } from '../../common/guards/rate-limit.guard';
 import { UploadCallDto } from './dto';
-import { Public } from '../../common/decorators/public.decorator';
-
 @ApiTags('imported-calls')
 @Controller('imported-calls')
-@Public()
 export class ImportedCallsController {
   constructor(
     private readonly service: ImportedCallsService,
@@ -47,6 +46,7 @@ export class ImportedCallsController {
     private readonly performanceMonitor: PerformanceMonitorService,
     private readonly cacheService: CacheService,
     private readonly rateLimitService: RateLimitService,
+    private readonly exportService: ExportService,
   ) {}
 
   @Post('upload')
@@ -60,16 +60,20 @@ export class ImportedCallsController {
       new ParseFilePipe({
         validators: [
           new MaxFileSizeValidator({ maxSize: 500 * 1024 * 1024 }), // 500MB
-          new FileTypeValidator({ fileType: /(mp3|wav|flac|ogg|webm|m4a)$/ }),
+          new FileTypeValidator({
+            fileType: /^audio\/(mpeg|wav|wave|flac|ogg|webm|mp4|x-m4a)$/,
+          }),
         ],
       }),
     )
     file: any,
     @Body() metadata: UploadCallDto,
+    @Request() req: any,
   ) {
     if (!file) throw new Error('File is required');
 
-    const customerId = metadata.agentId || 'default-customer';
+    // Get customerId from authenticated user's organization, or fallback to default
+    const customerId = req.user?.organizationId || 'default-customer';
     const fileHash = this.storageService.generateHash(file.buffer);
 
     // Decode filename properly to handle UTF-8 characters (Arabic, Chinese, etc.)
@@ -137,6 +141,7 @@ export class ImportedCallsController {
     )
     files: any[],
     @Body() metadata: UploadCallDto,
+    @Request() req: any,
   ) {
     if (!files || files.length === 0) {
       throw new HttpException(
@@ -152,7 +157,8 @@ export class ImportedCallsController {
       );
     }
 
-    const customerId = metadata.agentId || 'default-customer';
+    // Get customerId from authenticated user's organization, or fallback to default
+    const customerId = req.user?.organizationId || 'default-customer';
     const batchId = `batch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const calls: any[] = [];
     const rejectedCalls: any[] = [];
@@ -231,6 +237,7 @@ export class ImportedCallsController {
   @ApiOperation({ summary: 'List imported calls' })
   async list(
     @Query('customerId') customerId?: string,
+    @Query('agentId') agentId?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('status') status?: string,
@@ -240,6 +247,7 @@ export class ImportedCallsController {
   ) {
     const result = await this.service.findAll({
       customerId: customerId || 'default-customer',
+      agentId,
       status,
       dateFrom: dateFrom ? new Date(dateFrom) : undefined,
       dateTo: dateTo ? new Date(dateTo) : undefined,
@@ -257,16 +265,39 @@ export class ImportedCallsController {
     };
   }
 
+
+  @Get('bulk-status')
+  @ApiOperation({ summary: 'Get status for multiple calls' })
+  async getBulkStatus(
+    @Query('callIds') callIds: string,
+    @Query('customerId') customerId?: string,
+  ) {
+    if (!callIds) {
+      throw new HttpException(
+        'callIds parameter is required (comma-separated)',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const ids = callIds
+      .split(',')
+      .map((id) => id.trim())
+      .filter((id) => id);
+    return this.service.getBulkStatus(ids, customerId);
+  }
+
   @Get('analytics')
   @ApiOperation({ summary: 'Get aggregated analytics' })
   async getAnalytics(
     @Query('customerId') customerId?: string,
+    @Query('agentId') agentId?: string,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
     @Query('campaignId') campaignId?: string,
   ) {
     return this.service.getAnalytics({
       customerId: customerId || 'default-customer',
+      agentId,
       dateFrom: dateFrom ? new Date(dateFrom) : undefined,
       dateTo: dateTo ? new Date(dateTo) : undefined,
       campaignId,
@@ -335,11 +366,118 @@ export class ImportedCallsController {
     }
   }
 
+  @Post('export-bulk')
+  @ApiOperation({ summary: 'Export multiple calls' })
+  async exportBulk(
+    @Body() body: { callIds: string[]; format?: 'json' | 'csv' | 'pdf' },
+    @Res() res: Response,
+    @Query('customerId') customerId?: string,
+  ) {
+    if (!body.callIds || body.callIds.length === 0) {
+      throw new HttpException(
+        'callIds array is required',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const format = body.format || 'csv';
+    const calls = await Promise.all(
+      body.callIds.map((id) => this.service.findById(id, customerId)),
+    );
+
+    if (format === 'pdf') {
+      try {
+        const callsData = calls.map((call) => ({
+          callId: (call._id as any).toString(),
+          fileName: call.fileName,
+          duration: call.duration,
+          status: call.status,
+          uploadedAt: (call as any).createdAt,
+          evaluation: call.evaluation,
+        }));
+
+        const pdfBuffer =
+          await this.exportService.generateBulkEvaluationPDF(callsData);
+        const filename = `calls_export_${new Date().toISOString().split('T')[0]}.pdf`;
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename="${filename}"`,
+        );
+        res.send(pdfBuffer);
+        return;
+      } catch (error: any) {
+        throw new HttpException(
+          error.message || 'Failed to generate PDF',
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
+    }
+
+    if (format === 'csv') {
+      const csvRows = [
+        [
+          'Call ID',
+          'File Name',
+          'Duration (ms)',
+          'Status',
+          'Overall Score',
+          'Grade',
+          'Latency Score',
+          'Pronunciation Score',
+          'Jobs-to-be-Done Score',
+          'Uploaded At',
+        ],
+      ];
+
+      calls.forEach((call) => {
+        csvRows.push([
+          (call._id as any).toString(),
+          call.fileName || '',
+          call.duration?.toString() || 'N/A',
+          call.status || 'N/A',
+          call.evaluation?.overallScore?.toString() || 'N/A',
+          call.evaluation?.grade || 'N/A',
+          call.evaluation?.latency?.score?.toString() || 'N/A',
+          call.evaluation?.pronunciation?.score?.toString() || 'N/A',
+          call.evaluation?.jobsToBeDone?.score?.toString() || 'N/A',
+          (call as any).createdAt?.toISOString() || 'N/A',
+        ]);
+      });
+
+      const csvContent = csvRows
+        .map((row) => row.map((cell) => `"${cell}"`).join(','))
+        .join('\n');
+
+      return {
+        format: 'csv',
+        data: csvContent,
+        filename: `calls_export_${new Date().toISOString().split('T')[0]}.csv`,
+      };
+    }
+
+    return {
+      format: 'json',
+      data: calls.map((call) => ({
+        callId: (call._id as any).toString(),
+        fileName: call.fileName,
+        duration: call.duration,
+        status: call.status,
+        uploadedAt: (call as any).createdAt,
+        metadata: call.metadata,
+        evaluation: call.evaluation,
+      })),
+      filename: `calls_export_${new Date().toISOString().split('T')[0]}.json`,
+    };
+  }
+
   @Get(':id/export')
   @ApiOperation({ summary: 'Export call data' })
   async exportCall(
     @Param('id') id: string,
-    @Query('format') format: 'json' | 'csv' = 'json',
+    @Query('format') format: 'json' | 'csv' | 'pdf' = 'json',
+    @Res() res: Response,
   ) {
     const call = await this.service.findById(id);
     const callData = {
@@ -354,6 +492,27 @@ export class ImportedCallsController {
       evaluation: call.evaluation,
       exportedAt: new Date().toISOString(),
     };
+
+    if (format === 'pdf') {
+      try {
+        const pdfBuffer =
+          await this.exportService.generateEvaluationPDF(callData);
+        const filename = `${callData.fileName.replace(/\.[^/.]+$/, '')}_export.pdf`;
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename="${filename}"`,
+        );
+        res.send(pdfBuffer);
+        return;
+      } catch (error: any) {
+        throw new HttpException(
+          error.message || 'Failed to generate PDF',
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
+    }
 
     if (format === 'csv') {
       // Convert to CSV format

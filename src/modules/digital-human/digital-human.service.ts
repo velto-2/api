@@ -1,6 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { HttpService } from '@nestjs/axios';
 import { DigitalHumanStrategy } from './strategies/digital-human-strategy.abstract';
 import { ArabicDigitalHumanStrategy } from './strategies/arabic-digital-human.strategy';
 import { DigitalHumanInstance } from './digital-human-instance';
@@ -8,15 +6,13 @@ import {
   getLanguageConfig,
   LANGUAGES,
 } from '../../common/constants/languages.constant';
+import { LLMService } from './services/llm.service';
 
 @Injectable()
 export class DigitalHumanService {
   private readonly logger = new Logger(DigitalHumanService.name);
 
-  constructor(
-    private configService: ConfigService,
-    private httpService: HttpService,
-  ) {}
+  constructor(private llmService: LLMService) {}
 
   /**
    * Create a digital human instance using factory pattern
@@ -61,8 +57,7 @@ export class DigitalHumanService {
         return new ArabicDigitalHumanStrategy(
           languageConfig,
           dialectCode,
-          this.configService,
-          this.httpService,
+          this.llmService,
         );
       // Add more languages here as they're implemented
       // case 'en':

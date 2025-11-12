@@ -45,6 +45,22 @@ export class CreateTestConfigDto {
   name: string;
 
   @ApiProperty({
+    description: 'Customer/Organization ID',
+    example: 'org-123',
+  })
+  @IsString()
+  @IsNotEmpty()
+  customerId: string;
+
+  @ApiProperty({
+    description: 'Agent ID',
+    example: 'agent-456',
+  })
+  @IsString()
+  @IsNotEmpty()
+  agentId: string;
+
+  @ApiProperty({
     description: 'Agent phone number or endpoint to call',
     example: '+1234567890',
   })
@@ -94,5 +110,3 @@ export class CreateTestConfigDto {
   @IsOptional()
   isActive?: boolean;
 }
-
-

@@ -1,33 +1,23 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
 import { DigitalHumanStrategy } from './digital-human-strategy.abstract';
 import { Message } from '../interfaces/message.interface';
 import {
   LanguageConfig,
   Dialect,
 } from '../../../common/constants/languages.constant';
+import { LLMService } from '../services/llm.service';
 
 @Injectable()
 export class ArabicDigitalHumanStrategy extends DigitalHumanStrategy {
   private readonly logger = new Logger(ArabicDigitalHumanStrategy.name);
-  private readonly accountId: string;
-  private readonly apiToken: string;
-  private readonly baseUrl: string;
   private readonly dialect: Dialect;
 
   constructor(
     private config: LanguageConfig,
     dialectCode: string,
-    private configService: ConfigService,
-    private httpService: HttpService,
+    private llmService: LLMService,
   ) {
     super();
-    this.accountId =
-      this.configService.get<string>('cloudflare.accountId') || '';
-    this.apiToken = this.configService.get<string>('cloudflare.apiToken') || '';
-    this.baseUrl = `https://api.cloudflare.com/client/v4/accounts/${this.accountId}/ai/run`;
 
     // Get dialect configuration
     const dialect = this.config.dialects.find((d) => d.code === dialectCode);
@@ -66,12 +56,6 @@ Your goal is to have a realistic conversation that tests the agent's ability to 
     history: Message[],
     agentUtterance?: string,
   ): Promise<string> {
-    if (!this.accountId || !this.apiToken) {
-      throw new Error(
-        'Cloudflare credentials not configured. Please set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN',
-      );
-    }
-
     const systemPrompt = this.generateSystemPrompt(
       history.find((m) => m.role === 'system')?.content.split('\n')[0] ||
         'polite_customer',
@@ -80,7 +64,7 @@ Your goal is to have a realistic conversation that tests the agent's ability to 
     );
 
     // Build conversation messages for LLM
-    const messages: any[] = [
+    const messages: Array<{ role: string; content: string }> = [
       { role: 'system', content: systemPrompt },
       ...history
         .filter((m) => m.role !== 'system')
@@ -103,68 +87,17 @@ Your goal is to have a realistic conversation that tests the agent's ability to 
     }
 
     try {
-      const model = this.config.llm.model || '@cf/meta/llama-3.1-8b-instruct';
-
-      const response = await firstValueFrom(
-        this.httpService.post(
-          `${this.baseUrl}/${model}`,
-          {
-            messages: messages,
-            max_tokens: 150,
-            temperature: 0.7,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${this.apiToken}`,
-              'Content-Type': 'application/json',
-            },
-          },
-        ),
+      const response = await this.llmService.generate(
+        messages,
+        this.config.code,
+        {
+          model: this.config.llm.model,
+          maxTokens: 150,
+          temperature: 0.7,
+        },
       );
 
-      // Cloudflare Workers AI returns response in different formats
-      // Handle: { result: { response: "..." } } or { response: "..." } or { result: "..." }
-      let responseText = '';
-      
-      // Log the raw response for debugging (first time only)
-      if (!this.logger['_cloudflareDebugLogged']) {
-        this.logger.log(`Cloudflare AI response structure: ${JSON.stringify(response.data).substring(0, 200)}`);
-        this.logger['_cloudflareDebugLogged'] = true;
-      }
-      
-      if (response.data) {
-        // Check if result is an object with a response property
-        if (response.data.result && typeof response.data.result === 'object') {
-          responseText = response.data.result.response || response.data.result.text || '';
-        } 
-        // Check if result is a string directly
-        else if (typeof response.data.result === 'string') {
-          responseText = response.data.result;
-        }
-        // Check for direct response property
-        else if (typeof response.data.response === 'string') {
-          responseText = response.data.response;
-        }
-        // Check for message property
-        else if (typeof response.data.message === 'string') {
-          responseText = response.data.message;
-        }
-        // Check for text property
-        else if (typeof response.data.text === 'string') {
-          responseText = response.data.text;
-        }
-      }
-
-      // Ensure we have a string before calling trim
-      if (typeof responseText !== 'string') {
-        this.logger.error(
-          `Unexpected response format from Cloudflare AI: ${JSON.stringify(response.data)}`,
-        );
-        responseText = String(responseText || '');
-      }
-
-      // Clean up response
-      responseText = responseText.trim();
+      let responseText = response.text;
 
       // Remove any English if it somehow got in
       if (responseText.match(/^[a-zA-Z]/)) {

@@ -15,14 +15,17 @@ export class ImportedCallsService {
     return call.save();
   }
 
-  async findById(id: string, customerId?: string): Promise<ImportedCallDocument> {
+  async findById(
+    id: string,
+    customerId?: string,
+  ): Promise<ImportedCallDocument> {
     if (!id || id === 'undefined') {
       throw new NotFoundException('Call ID is required');
     }
-    
+
     const query: any = { _id: id, deletedAt: null };
     if (customerId) query.customerId = customerId;
-    
+
     const call = await this.importedCallModel.findOne(query);
     if (!call) throw new NotFoundException('Call not found');
     return call;
@@ -30,6 +33,7 @@ export class ImportedCallsService {
 
   async findAll(filters: {
     customerId: string;
+    agentId?: string;
     status?: string;
     dateFrom?: Date;
     dateTo?: Date;
@@ -42,6 +46,7 @@ export class ImportedCallsService {
       deletedAt: null,
     };
 
+    if (filters.agentId) query['metadata.agentId'] = filters.agentId;
     if (filters.status) query.status = filters.status;
     if (filters.campaignId) query['metadata.campaignId'] = filters.campaignId;
     if (filters.dateFrom || filters.dateTo) {
@@ -58,7 +63,9 @@ export class ImportedCallsService {
     const [calls, total] = await Promise.all([
       this.importedCallModel
         .find(query)
-        .select('_id customerId fileName fileSize duration status processingStage progressPercentage metadata evaluation createdAt')
+        .select(
+          '_id customerId fileName fileSize duration status processingStage progressPercentage metadata evaluation createdAt',
+        )
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
@@ -68,11 +75,17 @@ export class ImportedCallsService {
     return { calls, total };
   }
 
-  async update(id: string, data: Partial<ImportedCall>, customerId?: string): Promise<ImportedCallDocument> {
+  async update(
+    id: string,
+    data: Partial<ImportedCall>,
+    customerId?: string,
+  ): Promise<ImportedCallDocument> {
     const query: any = { _id: id, deletedAt: null };
     if (customerId) query.customerId = customerId;
 
-    const call = await this.importedCallModel.findOneAndUpdate(query, data, { new: true });
+    const call = await this.importedCallModel.findOneAndUpdate(query, data, {
+      new: true,
+    });
     if (!call) throw new NotFoundException('Call not found');
     return call;
   }
@@ -84,15 +97,64 @@ export class ImportedCallsService {
   async delete(id: string, customerId?: string): Promise<void> {
     const query: any = { _id: id };
     if (customerId) query.customerId = customerId;
-    
+
     const result = await this.importedCallModel.deleteOne(query);
     if (result.deletedCount === 0) {
       throw new NotFoundException('Call not found');
     }
   }
 
+
+  async getBulkStatus(callIds: string[], customerId?: string): Promise<any> {
+    if (!callIds || callIds.length === 0) {
+      throw new Error('At least one call ID is required');
+    }
+
+    const query: any = {
+      _id: { $in: callIds },
+      deletedAt: null,
+    };
+    if (customerId) query.customerId = customerId;
+
+    const calls = await this.importedCallModel
+      .find(query)
+      .select(
+        '_id status processingStage progressPercentage evaluation createdAt',
+      );
+
+    const statusCounts = {
+      pending: 0,
+      processing: 0,
+      transcribing: 0,
+      evaluating: 0,
+      completed: 0,
+      failed: 0,
+    };
+
+    calls.forEach((call) => {
+      const status = call.status || 'pending';
+      if (status in statusCounts) {
+        statusCounts[status as keyof typeof statusCounts]++;
+      }
+    });
+
+    return {
+      total: callIds.length,
+      found: calls.length,
+      statusCounts,
+      calls: calls.map((call) => ({
+        callId: (call._id as any).toString(),
+        status: call.status,
+        processingStage: call.processingStage,
+        progressPercentage: call.progressPercentage || 0,
+        hasEvaluation: !!call.evaluation,
+      })),
+    };
+  }
+
   async getAnalytics(filters: {
     customerId: string;
+    agentId?: string;
     dateFrom?: Date;
     dateTo?: Date;
     campaignId?: string;
@@ -113,7 +175,10 @@ export class ImportedCallsService {
     const calls = await this.importedCallModel.find(query);
 
     const totalCalls = calls.length;
-    const totalDuration = calls.reduce((sum, call) => sum + (call.duration || 0), 0);
+    const totalDuration = calls.reduce(
+      (sum, call) => sum + (call.duration || 0),
+      0,
+    );
     const averageCallDuration = totalCalls > 0 ? totalDuration / totalCalls : 0;
 
     // Calculate average scores
@@ -121,9 +186,7 @@ export class ImportedCallsService {
       .map((call) => call.evaluation?.overallScore)
       .filter((s) => s !== undefined && s !== null) as number[];
     const averageOverallScore =
-      scores.length > 0
-        ? scores.reduce((a, b) => a + b, 0) / scores.length
-        : 0;
+      scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
 
     // Score distribution
     const scoreDistribution = {
@@ -136,8 +199,15 @@ export class ImportedCallsService {
 
     // Metric averages
     const metricAverages: any = {};
-    const metrics = ['latency', 'interruption', 'pronunciation', 'repetition', 'disconnection', 'jobsToBeDone'];
-    
+    const metrics = [
+      'latency',
+      'interruption',
+      'pronunciation',
+      'repetition',
+      'disconnection',
+      'jobsToBeDone',
+    ];
+
     for (const metric of metrics) {
       const metricScores = calls
         .map((call) => call.evaluation?.[metric]?.score)
@@ -164,4 +234,3 @@ export class ImportedCallsService {
     };
   }
 }
-

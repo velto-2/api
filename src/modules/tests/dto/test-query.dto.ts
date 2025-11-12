@@ -4,6 +4,22 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class TestConfigQueryDto {
   @ApiPropertyOptional({
+    description: 'Filter by customer/organization ID',
+    example: 'org-123',
+  })
+  @IsString()
+  @IsOptional()
+  customerId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter by agent ID',
+    example: 'agent-456',
+  })
+  @IsString()
+  @IsOptional()
+  agentId?: string;
+
+  @ApiPropertyOptional({
     description: 'Filter by language code',
     example: 'ar',
   })
@@ -26,5 +42,3 @@ export class TestConfigQueryDto {
   @IsOptional()
   search?: string;
 }
-
-

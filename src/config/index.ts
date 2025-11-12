@@ -5,6 +5,7 @@ import vonageConfig from './vonage.config';
 import telephonyConfig from './telephony.config';
 import cloudflareConfig from './cloudflare.config';
 import elevenlabsConfig from './elevenlabs.config';
+import huggingfaceConfig from './huggingface.config';
 
 export {
   appConfig,
@@ -14,4 +15,5 @@ export {
   telephonyConfig,
   cloudflareConfig,
   elevenlabsConfig,
+  huggingfaceConfig,
 };

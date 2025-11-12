@@ -58,6 +58,14 @@ export class TestsService {
   async findAll(query: TestConfigQueryDto): Promise<TestConfigDocument[]> {
     const filter: any = {};
 
+    if (query.customerId) {
+      filter.customerId = query.customerId;
+    }
+
+    if (query.agentId) {
+      filter.agentId = query.agentId;
+    }
+
     if (query.language) {
       filter['language.code'] = query.language;
     }
@@ -70,9 +78,14 @@ export class TestsService {
       filter.name = { $regex: query.search, $options: 'i' };
     }
 
-    const testConfigs = await this.testConfigModel.find(filter).sort({ createdAt: -1 }).exec();
+    const testConfigs = await this.testConfigModel
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .exec();
     // Convert to JSON to ensure ObjectIds are serialized
-    return testConfigs.map(config => config.toJSON ? config.toJSON() : config) as TestConfigDocument[];
+    return testConfigs.map((config) =>
+      config.toJSON ? config.toJSON() : config,
+    ) as TestConfigDocument[];
   }
 
   async findOne(id: string): Promise<TestConfigDocument> {

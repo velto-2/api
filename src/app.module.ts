@@ -15,6 +15,7 @@ import { DigitalHumanModule } from './modules/digital-human/digital-human.module
 import { TestRunsModule } from './modules/test-runs/test-runs.module';
 import { ImportedCallsModule } from './modules/imported-calls/imported-calls.module';
 import { TestSchedulesModule } from './modules/test-schedules/test-schedules.module';
+import { AgentsModule } from './modules/agents/agents.module';
 import {
   appConfig,
   databaseConfig,
@@ -23,6 +24,7 @@ import {
   telephonyConfig,
   cloudflareConfig,
   elevenlabsConfig,
+  huggingfaceConfig,
 } from './config';
 
 @Module({
@@ -37,6 +39,7 @@ import {
         telephonyConfig,
         cloudflareConfig,
         elevenlabsConfig,
+        huggingfaceConfig,
       ],
       envFilePath: ['.env'],
     }),
@@ -52,6 +55,7 @@ import {
     TestRunsModule,
     ImportedCallsModule,
     TestSchedulesModule,
+    AgentsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

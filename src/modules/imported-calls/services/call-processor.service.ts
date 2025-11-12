@@ -1,5 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
 import { ImportedCallsService } from '../imported-calls.service';
+import { AgentKnowledgeBaseService } from './agent-knowledge-base.service';
 import { StorageService } from './storage.service';
 import { SpeechService } from '../../speech/services/speech.service';
 import { WebhookService } from './webhook.service';
@@ -8,6 +11,8 @@ import { PerformanceMonitorService } from './performance-monitor.service';
 import { CacheService } from './cache.service';
 import { ImportedCallDocument } from '../schemas';
 import { getLanguageConfig } from '../../../common/constants/languages.constant';
+import { LLMService } from '../../digital-human/services/llm.service';
+import { AgentsService } from '../../agents/agents.service';
 
 @Injectable()
 export class CallProcessorService {
@@ -27,12 +32,17 @@ export class CallProcessorService {
 
   constructor(
     private importedCallsService: ImportedCallsService,
+    private knowledgeBaseService: AgentKnowledgeBaseService,
     private storageService: StorageService,
     private speechService: SpeechService,
     private webhookService: WebhookService,
     private errorHandler: ErrorHandlerService,
     private performanceMonitor: PerformanceMonitorService,
     private cacheService: CacheService,
+    private httpService: HttpService,
+    private configService: ConfigService,
+    private llmService: LLMService,
+    private agentsService: AgentsService,
   ) {}
 
   async processCall(callId: string): Promise<void> {
@@ -156,6 +166,19 @@ export class CallProcessorService {
       Date.now() - storageStart,
     );
 
+    // Log audio file details for debugging
+    const audioSizeMB = audioBuffer.length / (1024 * 1024);
+    this.logger.log(
+      `Audio file loaded: ${audioSizeMB.toFixed(2)} MB (${audioBuffer.length} bytes), expected size: ${call.fileSize} bytes`,
+    );
+    
+    // Verify we got the full file
+    if (call.fileSize && Math.abs(audioBuffer.length - call.fileSize) > 1000) {
+      this.logger.warn(
+        `Audio buffer size mismatch: loaded ${audioBuffer.length} bytes, expected ${call.fileSize} bytes`,
+      );
+    }
+
     // Check cache for existing transcript
     const cacheKey = this.cacheService.generateTranscriptKey(audioBuffer);
     const cachedTranscript = this.cacheService.get<{
@@ -180,12 +203,50 @@ export class CallProcessorService {
     const extension = call.fileName?.split('.').pop()?.toLowerCase() || 'mp3';
     const mimeType = this.getMimeType(extension);
 
-    // Auto-detect language - let Whisper detect automatically
-    this.logger.log(`Starting transcription for call ${call._id}`);
+    // Determine language: use agent's language if available, otherwise auto-detect
+    let languageCode = 'auto';
+    if (call.metadata?.agentId) {
+      try {
+        let agent;
+        // Try to find agent - if customerId is available, use it; otherwise search by agentId
+        if (call.customerId && call.customerId !== 'default-customer') {
+          agent = await this.agentsService.findOne(
+            call.customerId,
+            call.metadata.agentId,
+          );
+        } else {
+          // If no customerId, search by agentId alone (should be unique per organization)
+          const agents = await this.agentsService.findAll({
+            agentId: call.metadata.agentId,
+            isActive: true,
+          });
+          agent = agents.length > 0 ? agents[0] : null;
+        }
+
+        if (agent?.language) {
+          languageCode = agent.language;
+          this.logger.log(
+            `Using agent language: ${languageCode} for call ${call._id}`,
+          );
+        }
+      } catch (error: any) {
+        this.logger.warn(
+          `Could not fetch agent ${call.metadata.agentId}, using auto-detect: ${error.message}`,
+        );
+      }
+    }
+
+    this.logger.log(
+      `Starting transcription for call ${call._id}${languageCode !== 'auto' ? ` (language: ${languageCode})` : ' (auto-detect)'}`,
+    );
     const apiStart = Date.now();
-    const result = await this.speechService.transcribe(audioBuffer, 'auto', {
-      mimeType,
-    });
+    const result = await this.speechService.transcribe(
+      audioBuffer,
+      languageCode,
+      {
+        mimeType,
+      },
+    );
     this.performanceMonitor.recordApiCall(
       (call._id as any).toString(),
       Date.now() - apiStart,
@@ -197,9 +258,24 @@ export class CallProcessorService {
       detectedLanguage = this.detectLanguageFromText(result.text);
     }
 
+    // Log transcription details
+    const transcriptionLength = result.text?.length || 0;
+    const estimatedWords = transcriptionLength / 5; // Rough estimate: 5 chars per word
     this.logger.log(
-      `Transcription completed: ${result.text?.length || 0} chars, language: ${detectedLanguage}`,
+      `Transcription completed: ${transcriptionLength} chars (~${Math.round(estimatedWords)} words), language: ${detectedLanguage}`,
     );
+    
+    // Log duration if available
+    if (result.duration) {
+      this.logger.log(`Transcribed duration: ${result.duration}s`);
+    }
+    
+    // Warn if transcription seems short for the file size
+    if (call.fileSize && audioSizeMB > 1 && transcriptionLength < 100) {
+      this.logger.warn(
+        `Transcription seems short (${transcriptionLength} chars) for a ${audioSizeMB.toFixed(2)} MB file. This might indicate incomplete transcription.`,
+      );
+    }
 
     // Basic speaker diarization: split text into sentences and alternate speakers
     const transcripts = this.performBasicDiarization(
@@ -257,8 +333,11 @@ export class CallProcessorService {
     evaluation.disconnection = disconnection;
     this.logger.log(`Disconnection analyzed: score ${disconnection.score}`);
 
-    // Basic jobs-to-be-done
-    const jobsToBeDone = await this.analyzeJobsToBeDone(call.transcripts || []);
+    // Basic jobs-to-be-done (with knowledge base if available)
+    const agentId = call.metadata?.agentId;
+    const jobsToBeDone = agentId
+      ? await this.analyzeJobsToBeDone(call.transcripts || [], agentId)
+      : await this.analyzeJobsToBeDone(call.transcripts || []);
     evaluation.jobsToBeDone = jobsToBeDone;
     this.logger.log(`Jobs-to-be-done analyzed: score ${jobsToBeDone.score}`);
 
@@ -389,13 +468,119 @@ export class CallProcessorService {
     };
   }
 
-  private async analyzeJobsToBeDone(transcripts: any[]): Promise<any> {
+  private async analyzeJobsToBeDone(
+    transcripts: any[],
+    agentId?: string,
+  ): Promise<any> {
     if (transcripts.length === 0 || !transcripts[0]?.message) {
       this.logger.warn('No transcripts available for jobs-to-be-done analysis');
       return { score: 0, wasTaskCompleted: false };
     }
 
-    // For single transcript without speaker diarization, analyze the whole text
+    // Try to use knowledge base if agentId is provided
+    if (agentId) {
+      try {
+        const knowledgeBase =
+          await this.knowledgeBaseService.findByAgentId(agentId);
+        if (knowledgeBase && knowledgeBase.expectedJobs.length > 0) {
+          return await this.analyzeJobsToBeDoneWithKnowledgeBase(
+            transcripts,
+            knowledgeBase,
+          );
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Failed to use knowledge base for agent ${agentId}, falling back to generic analysis: ${error.message}`,
+        );
+      }
+    }
+
+    // Fallback to generic analysis
+    return this.analyzeJobsToBeDoneGeneric(transcripts);
+  }
+
+  private async analyzeJobsToBeDoneWithKnowledgeBase(
+    transcripts: any[],
+    knowledgeBase: any,
+  ): Promise<any> {
+    const conversationText = transcripts
+      .map((t) => `${t.speaker}: ${t.message}`)
+      .join('\n');
+
+    const jobsDescription = knowledgeBase.expectedJobs
+      .map(
+        (job: any) =>
+          `- ${job.name}: ${job.description || ''}\n  Required steps: ${(job.requiredSteps || []).join(', ')}`,
+      )
+      .join('\n');
+
+    const prompt = `Analyze this customer service conversation against the agent's expected jobs.
+
+Agent's Expected Jobs:
+${jobsDescription}
+
+Conversation:
+${conversationText}
+
+Determine:
+1. Which expected job(s) were attempted?
+2. Were the required steps completed?
+3. Was the job successfully completed?
+4. Rate completion on a scale of 0-100.
+
+Respond in JSON format only:
+{
+  "attemptedJobs": ["job-id-1"],
+  "completedJobs": ["job-id-1"],
+  "missingSteps": [],
+  "score": 85,
+  "reason": "Job was completed successfully"
+}`;
+
+    try {
+      // Determine language from transcripts or default to Arabic
+      const detectedLanguage = transcripts[0]?.language || 'ar';
+      const languageCode = detectedLanguage.split('-')[0].toLowerCase(); // en-US -> en
+
+      this.logger.log(
+        `Analyzing jobs-to-be-done using LLM for language: ${languageCode}`,
+      );
+
+      const response = await this.llmService.generate(
+        [{ role: 'user', content: prompt }],
+        languageCode,
+        {
+          maxTokens: 300,
+          temperature: 0.3,
+        },
+      );
+
+      const responseText = response.text;
+
+      // Try to extract JSON from response
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return {
+          wasTaskCompleted: (parsed.completedJobs || []).length > 0,
+          attemptedJobs: parsed.attemptedJobs || [],
+          completedJobs: parsed.completedJobs || [],
+          missingSteps: parsed.missingSteps || [],
+          score: parsed.score || 0,
+          reason: parsed.reason || '',
+          analysisMethod: 'knowledge-base',
+        };
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Failed to analyze with knowledge base: ${error.message}, falling back to generic`,
+      );
+    }
+
+    return this.analyzeJobsToBeDoneGeneric(transcripts);
+  }
+
+  private analyzeJobsToBeDoneGeneric(transcripts: any[]): any {
     const allText = transcripts
       .map((t) => t.message || '')
       .join(' ')
@@ -419,7 +604,6 @@ export class CallProcessorService {
     ];
     const hasCompletion = completionKeywords.some((kw) => allText.includes(kw));
 
-    // Check for task-related keywords
     const taskKeywords = [
       'inform',
       'help',
@@ -431,18 +615,18 @@ export class CallProcessorService {
     ];
     const hasTaskContext = taskKeywords.some((kw) => allText.includes(kw));
 
-    // Score based on completion and task context
-    let score = 40; // Default for no clear completion
+    let score = 40;
     if (hasCompletion) {
       score = 80;
     } else if (hasTaskContext) {
-      score = 60; // Task context present but no clear completion
+      score = 60;
     }
 
     return {
       wasTaskCompleted: hasCompletion,
       completionScore: score,
       score,
+      analysisMethod: 'generic',
     };
   }
 
